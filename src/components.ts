@@ -1,8 +1,9 @@
-import { PropertyDataType } from "@sinkapoy/home-core";
-import { MiCloudService } from "./MiCloudService";
-import { MiioDeviceConnection } from "./MiQuery";
-import { ISaveDeviceInfo } from "./interfaces/saves/ISaveDeviceInfo";
-import { IMiotDeviceProperty } from "./interfaces/IMiotDeviceProperty";
+import { type PropertyDataType } from '@sinkapoy/home-core';
+import { type MiCloudService } from './MiCloudService';
+import { type MiioDeviceConnection } from './MiQuery';
+import { type ISaveDeviceInfo } from './interfaces/saves/ISaveDeviceInfo';
+import { type IMiotDeviceProperty } from './interfaces/IMiotDeviceProperty';
+import { type IMiotDeviceAction } from './interfaces/IMiotDeviceAction';
 
 export enum DataFormat {
     string,
@@ -13,7 +14,7 @@ export enum DataFormat {
 export class MiDeviceInfoComponent implements Partial<ISaveDeviceInfo> {
     /** device id */
     readonly did: string;
-    deviceType: number
+    deviceType: number;
     readonly token: string;
     ip: string;
     readonly miioUserId: number;
@@ -23,9 +24,12 @@ export class MiDeviceInfoComponent implements Partial<ISaveDeviceInfo> {
 
     localConnection?: MiioDeviceConnection;
 
-    constructor(devInfo: ISaveDeviceInfo) {
+    fetchCountdown = 0;
+
+    constructor (devInfo: ISaveDeviceInfo) {
         Object.assign(this, devInfo);
     }
 }
 
 export class MiotDeviceProperties extends Map<string, IMiotDeviceProperty<PropertyDataType.any>> {}
+export class MiotDeviceActions extends Map<string, IMiotDeviceAction> {};

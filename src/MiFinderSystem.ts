@@ -1,27 +1,25 @@
-import { FileT, HomeSystem, homeEngine } from "@sinkapoy/home-core";
-import { HandshakeConnection, IQueryResult } from "./MiQuery";
-import { ISaveConfig } from "./interfaces/saves/ISaveConfig";
-import { MiCloudService } from "./MiCloudService";
-import { readFile, writeFile } from "fs/promises";
-import { IAccountDeviceInfo } from "./interfaces/IAccountDeviceInfo";
-import { ISaveDeviceInfo } from "./interfaces/saves/ISaveDeviceInfo";
-import { existsSync } from "fs";
-import { getUUIDByMiotDeviceId } from "./utils/deviceIdToUUIDAdapter";
-import { createMiotGadget } from "./utils/createDevice";
-import { miotPluginStore } from "./store";
+import { type FileT, HomeSystem, homeEngine } from '@sinkapoy/home-core';
+import { HandshakeConnection } from './MiQuery';
+import { type ISaveConfig } from './interfaces/saves/ISaveConfig';
+import { MiCloudService } from './MiCloudService';
+import { readFile, writeFile } from 'fs/promises';
+import { type IAccountDeviceInfo } from './interfaces/IAccountDeviceInfo';
+import { type ISaveDeviceInfo } from './interfaces/saves/ISaveDeviceInfo';
+import { existsSync } from 'fs';
+import { getUUIDByMiotDeviceId } from './utils/deviceIdToUUIDAdapter';
+import { createMiotGadget } from './utils/createDevice';
+import { miotPluginStore } from './store';
 
 const FILE_PATH = 'server-data/miioConfig.json';
 const MIIO_DEVICES_PATH = 'server-data/miio_devices.json';
 class MiFinderSystem extends HomeSystem {
+    private readonly searchTimer = { countdown: 5000, time: 5000 };
 
-    private searchTimer = { countdown: 5000, time: 5000 };
-
-    private handshakeMsg = new HandshakeConnection('255.255.255.255')
+    private readonly handshakeMsg = new HandshakeConnection('255.255.255.255');
 
     private accounts: Record<number, MiCloudService> = {};
 
-    onInit(): void {
-        this.handshakeMsg.on('message', this.debug, this);
+    onInit (): void {
         homeEngine.emit('appendFile', {
             path: FILE_PATH,
             content: '',
@@ -32,32 +30,26 @@ class MiFinderSystem extends HomeSystem {
         });
         this.setupEvent('fileContent', this.parseConfig.bind(this));
         this.engine.emit('readFile', FILE_PATH);
-        console.log('init mi finder');
+        console.info('init mi finder');
     }
 
-    onDestroy(): void {
+    onDestroy (): void {
 
     }
 
-    onUpdate(dt: number): void {
-        // this.searchTimer.countdown -= dt;
-        // if (this.searchTimer.countdown <= 0) {
-        //     console.log('find')
-        //     this.findLocalDevices();
-        //     this.searchTimer.countdown = this.searchTimer.time;
-        // }
+    onUpdate (dt: number): void {
+        this.searchTimer.countdown -= dt;
+        if (this.searchTimer.countdown <= 0) {
+            this.findLocalDevices();
+            this.searchTimer.countdown = this.searchTimer.time;
+        }
     }
 
-    protected findLocalDevices() {
-        this.handshakeMsg.sendRaw();
+    protected findLocalDevices () {
+        this.handshakeMsg.send();
     }
 
-    debug(msg: IQueryResult) {
-        console.log(msg);
-    }
-
-    private parseConfig(file: FileT) {
-        console.log(file)
+    private parseConfig (file: FileT) {
         if (file.path !== FILE_PATH) return;
         try {
             const config: ISaveConfig = JSON.parse(file.content);
@@ -71,7 +63,7 @@ class MiFinderSystem extends HomeSystem {
 
                 acc.once('loggedIn', async () => {
                     const devs = await acc.getDevices();
-                    console.log(devs);
+                    console.debug('devices', devs);
                     this.accounts[acc.miioUserId] = acc;
                     miotPluginStore.accounts[acc.miioUserId] = acc;
                     await this.saveDevices(devs);
@@ -81,9 +73,10 @@ class MiFinderSystem extends HomeSystem {
         } catch (e) {
             console.error(e);
         }
+        this.addSavedDevices();
     }
 
-    private async saveDevices(devices: IAccountDeviceInfo[]) {
+    private async saveDevices (devices: IAccountDeviceInfo[]) {
         const config: Record<string, ISaveDeviceInfo> = JSON.parse(
             existsSync(MIIO_DEVICES_PATH) ? await readFile(MIIO_DEVICES_PATH, { encoding: 'utf-8' }) || '{}' : '{}');
         for (let i = 0; i < devices.length; i++) {
@@ -93,12 +86,12 @@ class MiFinderSystem extends HomeSystem {
                 ip: devices[i].localip,
                 miioUserId: devices[i].uid,
                 model: devices[i].model,
-            }
+            };
         }
         await writeFile(MIIO_DEVICES_PATH, JSON.stringify(config));
     }
 
-    private async addSavedDevices() {
+    private async addSavedDevices () {
         if (!existsSync(MIIO_DEVICES_PATH)) return;
         const devs = JSON.parse(await readFile(MIIO_DEVICES_PATH, { encoding: 'utf-8' })) as Record<string, ISaveDeviceInfo>;
         Object.values(devs).forEach(dev => {
@@ -106,7 +99,6 @@ class MiFinderSystem extends HomeSystem {
             homeEngine.addEntity(createMiotGadget(dev));
         });
     }
-
 }
 
 homeEngine.addSystem(new MiFinderSystem(), 10);

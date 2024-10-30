@@ -1,23 +1,22 @@
 export class CustomCryptRC4 {
-
     private _ksa!: number[];
     private _idx!: number;
     private _jdx!: number;
 
-    constructor(key: any, rounds: number) {
+    constructor (key: any, rounds: number) {
         this.setKey(key || '', rounds);
     }
 
-    private setKey(key: string, rounds: number) {
-        let ksa = Array.from({
-            length: 256
+    private setKey (key: string, rounds: number) {
+        const ksa = Array.from({
+            length: 256,
         }, (v, k) => k);
         let i = 0;
         let j = 0;
 
         if (key.length > 0) {
             const binKey = Buffer.from(key);
-            let len = binKey.length;
+            const len = binKey.length;
 
             for (i = 0; i < 256; i++) {
                 j = (j + ksa[i] + binKey[i % len]) & 255;
@@ -38,13 +37,13 @@ export class CustomCryptRC4 {
         this._jdx = j;
     }
 
-    crypt(data: Buffer) {
-        let ksa = (this._ksa || []).slice(0); // Array copy
+    crypt (data: Buffer) {
+        const ksa = (this._ksa || []).slice(0); // Array copy
         let i = this._idx || 0;
         let j = this._jdx || 0;
 
-        let len = data.length;
-        let out = Buffer.alloc(len);
+        const len = data.length;
+        const out = Buffer.alloc(len);
 
         for (let c = 0; c < len; c++) {
             i = (i + 1) & 255;
@@ -57,16 +56,15 @@ export class CustomCryptRC4 {
         return out;
     }
 
-    encode(data: string) {
+    encode (data: string) {
         return this.crypt(Buffer.from(data, 'utf8')).toString('base64');
     }
 
-    decode(data: string) {
+    decode (data: string) {
         return this.crypt(Buffer.from(data, 'base64')).toString('utf8');
     }
 
-    static create(key: any, rounds: number) {
+    static create (key: any, rounds: number) {
         return new CustomCryptRC4(key, rounds);
     }
-
 }

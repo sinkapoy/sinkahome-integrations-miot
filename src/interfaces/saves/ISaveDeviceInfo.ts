@@ -1,7 +1,7 @@
 export interface ISaveDeviceInfo {
-    did: string,
-    token: string,
-    ip: string,
-    miioUserId: number,
-    model: string,
+    did: string;
+    token: string;
+    ip: string;
+    miioUserId: number;
+    model: string;
 }

@@ -1,5 +1,4 @@
-import type { Property, PropertyDataType } from "@sinkapoy/home-core";
-import type { DataFormat } from "../components";
+import type { Property, PropertyDataType } from '@sinkapoy/home-core';
 
 export interface IMiotDeviceProperty<T extends PropertyDataType = PropertyDataType.any> {
     name: string;
@@ -9,7 +8,7 @@ export interface IMiotDeviceProperty<T extends PropertyDataType = PropertyDataTy
     urn: string;
     description: string;
     format: PropertyDataType;
-    range?: { min: number, max: number, step: number };
+    range?: { min: number; max: number; step: number; };
     enum?: Record<string, number>;
     homeProperty: Property<T>;
 }

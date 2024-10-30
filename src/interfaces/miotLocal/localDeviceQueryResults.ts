@@ -1,4 +1,4 @@
-import { KnownErrors } from "./KnownErrors";
+import { type KnownErrors } from './KnownErrors';
 
 interface IProperty {
     did: string;
@@ -12,7 +12,7 @@ export interface IGetProperties {
 }
 export interface IResultWithError {
     error: {
-        code: KnownErrors,
-        message: string,
-    }
+        code: KnownErrors;
+        message: string;
+    };
 }
