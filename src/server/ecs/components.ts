@@ -1,9 +1,9 @@
 import { type PropertyDataType } from '@sinkapoy/home-core';
-import { type MiCloudService } from './MiCloudService';
-import { type MiioDeviceConnection } from './MiQuery';
-import { type ISaveDeviceInfo } from './interfaces/saves/ISaveDeviceInfo';
-import { type IMiotDeviceProperty } from './interfaces/IMiotDeviceProperty';
-import { type IMiotDeviceAction } from './interfaces/IMiotDeviceAction';
+import { type MiCloudAccountProvider } from '../MiCloudAccountProvider';
+import { type MiioDeviceConnection } from '../MiQuery';
+import { type ISaveDeviceInfo } from '../../interfaces/saves/ISaveDeviceInfo';
+import { type IMiotDeviceProperty } from '../../interfaces/IMiotDeviceProperty';
+import { type IMiotDeviceAction } from '../../interfaces/IMiotDeviceAction';
 
 export enum DataFormat {
     string,
@@ -20,7 +20,7 @@ export class MiDeviceInfoComponent implements Partial<ISaveDeviceInfo> {
     readonly miioUserId: number;
     readonly model: string;
 
-    cloudAcc?: MiCloudService;
+    cloudAcc?: MiCloudAccountProvider;
 
     localConnection?: MiioDeviceConnection;
 

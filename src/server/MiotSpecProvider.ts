@@ -1,8 +1,9 @@
+import { PropertiesProcessor } from './../adapters/propertiesProcessor';
 import { type Entity } from '@ash.ts/ash';
-import { type AllDataTypesT, type IMiotSpec, type SpecAccessModesT } from './interfaces/IMiotSpec';
-import { MiDeviceInfoComponent, MiotDeviceActions, MiotDeviceProperties } from './components';
-import { ActionsComponent, type IActionArgument, type IProperty, PropertiesComponent, PropertyAccessMode, PropertyDataType } from '@sinkapoy/home-core';
-import { type IMiotDeviceProperty } from './interfaces/IMiotDeviceProperty';
+import { type AllDataTypesT, type IMiotSpec, type SpecAccessModesT } from '../interfaces/IMiotSpec';
+import { MiDeviceInfoComponent, MiotDeviceActions, MiotDeviceProperties } from './ecs/components';
+import { ActionsComponent, type IActionArgument, type IActionResult,  type IProperty, PropertiesComponent, PropertyAccessMode, PropertyDataType } from '@sinkapoy/home-core';
+import { type IMiotDeviceProperty } from '../interfaces/IMiotDeviceProperty';
 
 export class MiotSpecProvider {
     static fillEntityBySpec (spec: IMiotSpec, entity: Entity) {
@@ -54,6 +55,7 @@ export class MiotSpecProvider {
                     const actionId = serviceName + ':' + this.getSpecElementIdByUrn(actionSpec.type);
 
                     const args: IActionArgument[] = [];
+                    const results: IActionResult[] = [];
                     const miotArgs: string[] = [];
                     const miotResults: string[] = [];
                     if (service.properties) {
@@ -71,12 +73,16 @@ export class MiotSpecProvider {
                             const propSpec = service.properties[arg];
                             if (!propSpec) continue;
                             miotResults.push(serviceName + ':' + this.getSpecElementIdByUrn(propSpec.type));
+                            results.push({
+                                name: this.getSpecElementIdByUrn(propSpec.type),
+                                type: this.convertSpecFormat(propSpec.format),
+                            });
                         }
                     }
                     actions.addFromJson({
                         id: actionId,
                         argsT: args,
-                        resultT: [],
+                        resultT: results,
                     });
                     miotActions.set(actionId, {
                         name: serviceName,
@@ -88,6 +94,8 @@ export class MiotSpecProvider {
                 }
             }
         }
+
+        PropertiesProcessor.process(entity);
     }
 
     static async fetchAllReadableProperties (entity: Entity) {
@@ -138,9 +146,10 @@ export class MiotSpecProvider {
                 console.error('cant find miot property with id', prop.id);
             } else {
                 const result = await miotInfo.localConnection.writeProperties([miotProp]);
-                if (result.result[0].code === 0) {
-                    return true;
-                }
+                if(result.result)
+                    if (result.result[0].code === 0) {
+                        return true;
+                    }
             }
         }
         return false;
@@ -154,15 +163,15 @@ export class MiotSpecProvider {
         let mode = PropertyAccessMode.none;
         for (let i = 0; i < accessMode.length; i++) {
             switch (accessMode[i]) {
-                    case 'read':
-                        mode = mode | PropertyAccessMode.read;
-                        break;
-                    case 'write':
-                        mode = mode | PropertyAccessMode.write;
-                        break;
-                    case 'notify':
-                        mode = mode | PropertyAccessMode.notify;
-                        break;
+                case 'read':
+                    mode = mode | PropertyAccessMode.read;
+                    break;
+                case 'write':
+                    mode = mode | PropertyAccessMode.write;
+                    break;
+                case 'notify':
+                    mode = mode | PropertyAccessMode.notify;
+                    break;
             }
         }
         return mode;
@@ -170,31 +179,31 @@ export class MiotSpecProvider {
 
     private static convertSpecFormat (format: AllDataTypesT) {
         switch (true) {
-                case (format.includes('int')):
-                    return PropertyDataType.int;
-                case (format === 'float'):
-                    return PropertyDataType.float;
-                case (format === 'string'):
-                    return PropertyDataType.string;
+            case (format.includes('int')):
+                return PropertyDataType.int;
+            case (format === 'float'):
+                return PropertyDataType.float;
+            case (format === 'string'):
+                return PropertyDataType.string;
         }
         return PropertyDataType.boolean;
     }
 
     private static defaultValueByFormat (format: PropertyDataType) {
         switch (format) {
-                case PropertyDataType.any:
-                    return undefined;
-                case PropertyDataType.boolean:
-                    return false;
-                case PropertyDataType.float:
-                case PropertyDataType.int:
-                    return 0;
-                case PropertyDataType.json:
-                    return '{}';
-                case PropertyDataType.object:
-                    return {};
-                case PropertyDataType.string:
-                    return '';
+            case PropertyDataType.any:
+                return undefined;
+            case PropertyDataType.boolean:
+                return false;
+            case PropertyDataType.float:
+            case PropertyDataType.int:
+                return 0;
+            case PropertyDataType.json:
+                return '{}';
+            case PropertyDataType.object:
+                return {};
+            case PropertyDataType.string:
+                return '';
         }
     }
 }

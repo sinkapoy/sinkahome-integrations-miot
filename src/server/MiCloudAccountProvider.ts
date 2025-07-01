@@ -2,19 +2,21 @@ import { URLSearchParams } from 'url';
 import { createHash } from 'crypto';
 import { type IAuthData, MiCloudApiProvider } from './MiCloudApiProvider';
 import EventEmitter from 'eventemitter3';
-import { type IGetDevicesRequestResult } from './interfaces/IGetDevicesRequestResult';
+import { type IGetDevicesRequestResult } from '../interfaces/IGetDevicesRequestResult';
 import fetch from 'node-fetch';
 
 interface IMiCloudServiceEvents {
     loggedIn: () => any;
 }
 
-export class MiCloudService<T extends EventEmitter.ValidEventTypes = object> extends EventEmitter<IMiCloudServiceEvents | T> {
+export class MiCloudAccountProvider<T extends EventEmitter.ValidEventTypes = object> extends EventEmitter<IMiCloudServiceEvents | T> {
     static readonly countries = ['ru', 'us', 'tw', 'sg', 'cn', 'de', 'in', 'i2'];
     static readonly step1url = 'https://account.xiaomi.com/pass/serviceLogin?sid=xiaomiio&_json=true';
     static readonly step2url = 'https://account.xiaomi.com/pass/serviceLoginAuth2';
 
     private readonly agentId = 'ABCDEFABCDEFB';
+    
+    private loggedIn = false;
 
     private readonly auth: IAuthData = {
         userAgent: undefined,
@@ -30,11 +32,15 @@ export class MiCloudService<T extends EventEmitter.ValidEventTypes = object> ext
         return this.auth.miioUserId;
     }
 
+    get isLoggedIn(){
+        return this.loggedIn;
+    }
+
     constructor (
         private readonly username: string,
         password: string,
         locale = 'en',
-        country = MiCloudService.countries[0],
+        country = MiCloudAccountProvider.countries[0],
     ) {
         super();
         this.auth.userAgent = `Android-7.1.1-1.0.0-ONEPLUS A3010-136-${this.agentId} APP/xiaomi.smarthome APPV/62830`;
@@ -43,30 +49,36 @@ export class MiCloudService<T extends EventEmitter.ValidEventTypes = object> ext
         this.auth.country = country;
 
         console.debug('new cloud service for', this.username);
-        try {
-            this.login(username, password);
-        } catch {
-            console.error('cant login to mi home');
-        }
+        this.once('loggedIn', ()=>this.loggedIn = true);
+        this.login(username, password);
     }
 
     private async login (username: string, password: string) {
-        console.debug('login');
-        const sign = await this.loginStep1();
-        console.debug('sign', sign);
-        if (!sign) { return; }
-        const step2 = await this.loginStep2(username, password, sign);
-        if (!step2.location) { return; }
-        const serviceToken = await this.loginStep3(step2.location);
-        this.auth.miioUserId = step2.userId ?? 0;
-        this.auth.serviceToken = serviceToken!;
-        this.auth.ssecurity = step2.ssecurity!;
-
-        this.emit('loggedIn');
+        while(true){
+            try{
+                console.debug(`login with ${username}`);
+                const sign = await this.loginStep1();
+                console.debug('sign', sign);
+                if (!sign) { return; }
+                const step2 = await this.loginStep2(username, password, sign);
+                if (!step2.location) { return; }
+                const serviceToken = await this.loginStep3(step2.location);
+                this.auth.miioUserId = step2.userId ?? 0;
+                this.auth.serviceToken = serviceToken!;
+                this.auth.ssecurity = step2.ssecurity!;
+    
+                this.emit('loggedIn');
+                break;
+            } catch(e){
+                console.error(e);
+                await new Promise(r=>setTimeout(r, 10000));
+            }
+        }
+        
     }
 
     private async loginStep1 () {
-        let str = await (await fetch(MiCloudService.step1url)).text() ?? '{}';
+        let str = await (await fetch(MiCloudAccountProvider.step1url)).text() ?? '{}';
         if (str.indexOf('&&&START&&&') === 0) {
             str = str.replace('&&&START&&&', '');
         }
@@ -87,7 +99,7 @@ export class MiCloudService<T extends EventEmitter.ValidEventTypes = object> ext
             qs: '%3Fsid%3Dxiaomiio%26_json%3Dtrue',
             _sign: sign,
         });
-        let str = await (await fetch(MiCloudService.step2url, {
+        let str = await (await fetch(MiCloudAccountProvider.step2url, {
             method: 'POST',
             body: params,
             headers: {
@@ -140,5 +152,23 @@ export class MiCloudService<T extends EventEmitter.ValidEventTypes = object> ext
         if (!reqResult) return [];
 
         return reqResult.result.list;
+    }
+
+    async getMapData(deviceId: string, mapName: string){
+        const reqResult = await this.request('v2/home/get_interim_file_url', {
+            obj_name: `${this.miioUserId}/${deviceId}/${mapName}`,
+        });
+        // const reqResult = await this.request('v2/home/get_interim_file_url', {
+        //     obj_name: `${this.miioUserId}/${deviceId}/${mapName}`,
+        // });
+        // const reqResult = await this.request('/home/getmapfileurl', {
+        //     obj_name: `${mapName}`,
+        // });
+        console.debug(reqResult);
+        if(reqResult.result){
+            const url = reqResult.result.url;
+            console.debug(await MiCloudApiProvider.get(url, {}, this.auth));
+        }
+        return reqResult;
     }
 }

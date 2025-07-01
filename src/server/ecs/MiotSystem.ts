@@ -1,10 +1,10 @@
-import { HomeSystem, PropertyAccessMode, PropertyDataType, homeEngine } from '@sinkapoy/home-core';
+import { HomeSystem, PropertyAccessMode, PropertyDataType, homeEngine, ActionsComponent } from '@sinkapoy/home-core';
 import { MiotDeviceNode } from './nodes';
-import { HandshakeConnection, MiioDeviceConnection } from './MiQuery';
+import { MiioDeviceConnection } from '../MiQuery';
 import { existsSync } from 'fs';
 import { readFile, writeFile } from 'fs/promises';
-import { type IMiotSpec } from './interfaces/IMiotSpec';
-import { MiotSpecProvider } from './MiotSpecProvider';
+import { type IMiotSpec } from '../../interfaces/IMiotSpec';
+import { MiotSpecProvider } from '../MiotSpecProvider';
 import fetch from 'node-fetch';
 import { type Entity } from '@ash.ts/ash';
 import { MiDeviceInfoComponent, MiotDeviceActions, MiotDeviceProperties } from './components';
@@ -26,7 +26,7 @@ class MiotSystem extends HomeSystem {
         //
     }
 
-    onUpdate (dt: number): void {
+    onUpdate (_dt: number): void {
         //
     }
 
@@ -45,8 +45,9 @@ class MiotSystem extends HomeSystem {
     private async onWriteProperty (entity: Entity, id: string, val: any) {
         const deviceInfo = entity.get(MiDeviceInfoComponent);
         const props = entity.get(MiotDeviceProperties);
+        
         if (!props || !deviceInfo) return;
-
+        deviceInfo.fetchCountdown = MIOT_FETCH_TIMER;
         const prop = props.get(id);
 
         if (!prop) return;
@@ -64,12 +65,21 @@ class MiotSystem extends HomeSystem {
         if (!miotDevice) return;
         console.debug('invoke action');
         if (miotDevice.localConnection) {
-            const actions = entity.get(MiotDeviceActions);
+            const miotActions = entity.get(MiotDeviceActions);
             const props = entity.get(MiotDeviceProperties)!;
-            if (!actions?.has(id)) return;
-
-            const result = await miotDevice.localConnection.invokeAction(actions.get(id)!, props, args);
-            this.engine.emit('gadgetActonResult', entity, id, [result]);
+            const actions = entity.get(ActionsComponent)!;
+            if (!miotActions?.has(id)) return;
+            const miotAction = miotActions.get(id)!;
+            const result = await miotDevice.localConnection.invokeAction(miotAction, props, args);
+            const action = actions.get(id);
+            if(action && result.result){
+                // @ts-expect-error TODO: fix types
+                action.lastResult = (result.result.out as (Array<{piid: number; value: any;}> | undefined))?.map(val=>val.value) || [];
+                action.lastFinishTime = Date.now();
+                console.debug('action result', JSON.stringify(result));
+                this.engine.emit('gadgetActonResult', entity, id, action.lastResult);
+            }
+            
         }
     }
 
@@ -79,19 +89,15 @@ class MiotSystem extends HomeSystem {
             return;
         }
         console.debug(`try to handshake ${node.entity.name}`);
-        const handshakeConnection = new HandshakeConnection(node.miot.ip);
-        const handshake = await handshakeConnection.send();
-        if (!handshake) return;
         const dataConnection = new MiioDeviceConnection(
             node.miot.ip,
-            handshake.deviceType,
-            handshake.deviceId,
-            handshakeConnection.getTimeStamp(),
             node.miot.did,
             node.miot.token,
         );
 
-        await dataConnection.handshake();
+        if(!await dataConnection.handshake()){
+            return;
+        }
 
         node.miot.localConnection = dataConnection;
 
@@ -101,12 +107,16 @@ class MiotSystem extends HomeSystem {
             return;
         }
         MiotSpecProvider.fillEntityBySpec(specs, node.entity);
+        
+
         this.engine.emit('gadgetPropertyEvent', node.entity, node.properties.createPropertyFromJson({
             id: 'ready',
             dataType: PropertyDataType.boolean,
             accessMode: PropertyAccessMode.rwn,
             value: true,
         }));
+        // console.log(await node.miot.localConnection.send('get_map_v1', {}));
+
     }
 
     private async getSpecs (model: string) {

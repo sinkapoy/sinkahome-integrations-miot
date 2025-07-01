@@ -10,7 +10,7 @@ export class CustomCryptRC4 {
     private setKey (key: string, rounds: number) {
         const ksa = Array.from({
             length: 256,
-        }, (v, k) => k);
+        }, (_v, k) => k);
         let i = 0;
         let j = 0;
 

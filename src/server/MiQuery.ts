@@ -1,12 +1,12 @@
 import { createHash, createCipheriv, createDecipheriv } from 'crypto';
 import * as dgram from 'dgram';
 import EventEmitter from 'eventemitter3';
-import { type IMiotDeviceProperty } from './interfaces/IMiotDeviceProperty';
-import { type IGetProperties, type IResultWithError } from './interfaces/miotLocal/localDeviceQueryResults';
-import { KnownErrors } from './interfaces/miotLocal/KnownErrors';
+import { type IMiotDeviceProperty } from '../interfaces/IMiotDeviceProperty';
+import { type IGetProperties, type IResultWithError } from '../interfaces/miotLocal/localDeviceQueryResults';
+import { KnownErrors } from '../interfaces/miotLocal/KnownErrors';
 import { type PropertyDataType } from '@sinkapoy/home-core';
-import { type IMiotDeviceAction } from './interfaces/IMiotDeviceAction';
-import { type MiotDeviceProperties } from './components';
+import { type IMiotDeviceAction } from '../interfaces/IMiotDeviceAction';
+import { type MiotDeviceProperties } from './ecs/components';
 import { DeferredPromise } from 'ts-deferable';
 
 export interface IQueryMetadata {
@@ -38,8 +38,7 @@ abstract class ConnectionPrototype<T extends EventEmitter.ValidEventTypes = ICon
     protected timeStamp: number;
     protected timeStampTime = 0;
 
-    protected socket = dgram.createSocket('udp4');
-
+    protected socket: dgram.Socket;
     protected abstract sendRaw (load?: string): Promise<unknown>;
 
     // abstract send(method: string, params: Record<string, any>): Promise<any>;
@@ -67,11 +66,10 @@ export class MiioDeviceConnection extends ConnectionPrototype {
     protected queriesQueue: Query[] = [];
     private _busy = false;
 
+    static readonly queueBlacklist = new Set(['sweep:direction']);
+
     constructor (
         protected ip: string,
-        protected deviceType: number,
-        protected deviceId: number,
-        protected timeStamp: number,
         protected did: string,
         token: string,
         private readonly port = 54321,
@@ -83,51 +81,52 @@ export class MiioDeviceConnection extends ConnectionPrototype {
         this.key = createHash('md5').update(this.token).digest();
 
         this.IV = createHash('md5').update(this.key).update(this.token).digest();
-        this.socket.on('message', (msg) => {
-            const result = this.unpackMsg(msg);
-            if (result) {
-                this.emit('message', result);
-            }
-        });
-        this.socket.on('error', (e) => {
-            console.error('miot socket error:\n\t' + e.message);
-        });
-        this.socket.bind();
+        this.recreateSocket(false);
     }
 
     get busy () {
         return this._busy;
     }
 
-    protected async recreateSocket () {
+    protected async recreateSocket (wait = true) {
         if (this.socket) {
             try {
-                this.socket.disconnect();
+                this.socket.removeAllListeners();
                 this.socket.close();
             } catch {
                 //
             }
         }
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        this.socket = dgram.createSocket('udp4');
-        this.socket.on('message', (msg) => {
-            const result = this.unpackMsg(msg);
-            if (result) {
-                this.emit('message', result);
-            }
-        });
-        this.socket.on('error', (e) => {
-            console.error('miot socket error:\n\t' + e.message);
-        });
-        const bindPromise = new Promise((resolve) => {
-            this.socket.once('listening', resolve);
-        });
-        this.socket.bind();
-        await bindPromise;
-        await this.handshake();
+        if(wait)
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        try{
+            this.socket = dgram.createSocket({type: 'udp4', reuseAddr: true});
+            this.socket.on('message', (msg) => {
+                const result = this.unpackMsg(msg);
+                if (result) {
+                    this.emit('message', result);
+                }
+            });
+            this.socket.on('error', (e) => {
+                console.error('miot socket error:\n\t' + e.message);
+            });
+            this.socket.on('close', ()=>{
+                console.error('miot socket is closed');
+                this.recreateSocket(true);
+            });
+            const bindPromise = new DeferredPromise<void>((resolve) => {
+                this.socket.once('listening', resolve);
+            });
+            this.socket.bind({exclusive: false});
+            await bindPromise;
+            await this.handshake();
+        } catch (e) {
+            console.error(e);
+            await this.recreateSocket();
+        }
     }
 
-    protected async sendRaw (load?: string) {
+    protected async sendRaw (load?: string, wait = true): Promise<unknown> {
         this.queryNumber++;
         this.queryNumber %= 16535;
         const now = Date.now();
@@ -138,15 +137,27 @@ export class MiioDeviceConnection extends ConnectionPrototype {
             });
         }
         this.lastTimeAck = now;
-        return await new Promise((resolve) => {
-            setTimeout(() => { resolve({ error: 'network error' }); }, 5000);
+        if(wait)
+            return await new Promise((resolve) => {
+                setTimeout(() => { resolve({ error: 'network error' }); }, 5000);
+                const socket = this.socket;
+                const cb = async (msg: Buffer) => {
+                    const answer = this.unpackMsg(msg) as IResultWithError;
+                    socket.off('message', cb);
+                    resolve(answer);
+                };
+                socket.once('message', cb);
+                const msg = this.packMsg(
+                    this.encryptData(load ?? ''),
+                );
+                socket.send(
+                    msg,
+                    this.port,
+                    this.ip,
+                );
+            });
+        else {
             const socket = this.socket;
-            const cb = async (msg: Buffer) => {
-                const answer = this.unpackMsg(msg) as IResultWithError;
-                socket.off('message', cb);
-                resolve(answer);
-            };
-            socket.once('message', cb);
             const msg = this.packMsg(
                 this.encryptData(load ?? ''),
             );
@@ -155,7 +166,8 @@ export class MiioDeviceConnection extends ConnectionPrototype {
                 this.port,
                 this.ip,
             );
-        });
+            return Promise.resolve({});
+        }
     }
 
     private async sendFromQueue () {
@@ -183,7 +195,7 @@ export class MiioDeviceConnection extends ConnectionPrototype {
         }
     }
 
-    send (method: string, params: Record<string, any>) {
+    send (method: string, params: Record<string, any>, withoutQueue = false) {
         if (!params.timeout) {
             Object.assign(params, {
                 timeout: 16535,
@@ -191,10 +203,24 @@ export class MiioDeviceConnection extends ConnectionPrototype {
             });
         }
 
-        const query = new Query(method, params);
-        this.queriesQueue.unshift(query);
-        this.sendFromQueue();
-        return query.promise;
+        
+        if(withoutQueue){
+            if(!this.queriesQueue.length){
+                this.sendRaw(JSON.stringify({
+                    method,
+                    params,
+                    id: this.queryNumber,
+                }), false);
+            }
+            return Promise.resolve(<IResultWithError & IGetProperties>{});
+        } else {
+            const query = new Query(method, params);
+            this.queriesQueue.unshift(query);
+            this.sendFromQueue();
+            return query.promise;
+        }
+        
+        
     }
 
     async getProperties (props: IMiotDeviceProperty<PropertyDataType.any>[] = []) {
@@ -217,7 +243,7 @@ export class MiioDeviceConnection extends ConnectionPrototype {
                 value: prop.homeProperty.value,
             };
         });
-        return await this.send('set_properties', params);
+        return await this.send('set_properties', params, MiioDeviceConnection.queueBlacklist.has(props[0].name));
     }
 
     async invokeAction (action: IMiotDeviceAction, props: MiotDeviceProperties, args: any[]) {
@@ -259,6 +285,8 @@ export class MiioDeviceConnection extends ConnectionPrototype {
         // const length = dataView.getUint16(2);
         const deviceType = dataView.getUint16(8);
         const deviceId = dataView.getUint16(10);
+        this.deviceId = deviceId;
+        this.deviceType = deviceType;
         const timeStamp = dataView.getUint32(12);
         this.timeStamp = timeStamp;
         this.timeStampTime = Date.now();
@@ -307,25 +335,32 @@ export class MiioDeviceConnection extends ConnectionPrototype {
         return buffer;
     }
 
-    handshake () {
+    async handshake () {
         const buffer = Buffer.allocUnsafe(32);
         buffer.writeUint16BE(0x2131);
         buffer.writeUint16BE(0x20, 2);
         for (let i = 0; i < 7; i++) {
             buffer.writeUint32BE(0xffffffff, 4 + i * 4);
         }
-        return new Promise(resolve => {
-            const cb = (msg: Buffer) => {
-                resolve(this.unpackMsg(msg, true));
-            };
-            this.socket.once('message', cb);
-            this.socket.send(buffer, this.port, this.ip, (e, l) => {
-                if (e) {
-                    this.socket.off('message', cb);
-                    resolve(undefined);
-                }
+        for(let i =0; i < 10; i++){
+            const result = await new Promise<boolean>(resolve => {
+                const cb = (msg: Buffer) => {
+                    resolve(this.unpackMsg(msg, true));
+                };
+                this.socket.once('message', cb);
+                this.socket.send(buffer, this.port, this.ip, (e, _l) => {
+                    if (e) {
+                        this.socket.off('message', cb);
+                        resolve(true);
+                    }
+                });
+                setTimeout(()=>resolve(false), 5000);
             });
-        });
+            if(result){
+                return true;
+            }
+        }
+        return false;
     }
 
     private getChecksum (header: Buffer, encryptedMsg: Buffer) {
@@ -339,6 +374,7 @@ export class MiioDeviceConnection extends ConnectionPrototype {
 
 export class HandshakeConnection extends ConnectionPrototype {
     private readonly load = '';
+    private recreateSocketPromise = new DeferredPromise();
     constructor (
         protected ip,
         private readonly port = 54321,
@@ -347,24 +383,13 @@ export class HandshakeConnection extends ConnectionPrototype {
         for (let i = 0; i < 14 * 4; i++) {
             this.load += 'F';
         }
-        this.socket.on('message', (msg) => {
-            const result = this.unpackMsg(msg, true);
-            if (result) {
-                this.emit('message', result);
-            }
-        });
-        this.socket.on('error', error => {
-            console.error(error);
-        });
-        this.socket.bind(() => {
-            this.socket.setBroadcast(true);
-            console.debug('socket', this.socket.address());
-        });
+        this.recreateSocket(false);  
     }
 
-    protected sendRaw (): Promise<IHandshakeResult | undefined> {
+    protected async sendRaw (): Promise<IHandshakeResult | undefined> {
+        await this.recreateSocketPromise;
         return new Promise(resolve => {
-            const socket = dgram.createSocket('udp4');
+            const socket = dgram.createSocket({type: 'udp4', reuseAddr: true});
 
             socket.once('message', msg => {
                 resolve(this.unpackMsg(msg, true));
@@ -378,7 +403,7 @@ export class HandshakeConnection extends ConnectionPrototype {
                 sendMsg,
                 this.port,
                 this.ip,
-                (a, b) => {
+                (_a, _b) => {
                     // console.error(a,b)
                 },
             );
@@ -403,6 +428,40 @@ export class HandshakeConnection extends ConnectionPrototype {
                 deviceId,
                 timeStamp,
             };
+        }
+    }
+
+    protected async recreateSocket (wait = true) {
+        if (this.socket) {
+            try {
+                this.socket.disconnect();
+                this.socket.close();
+            } catch {
+                //
+            }
+        }
+        if(wait)
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        try{
+            this.socket = dgram.createSocket({type: 'udp4', reuseAddr: true});
+            this.socket.on('message', (msg) => {
+                const result = this.unpackMsg(msg, true);
+                if (result) {
+                    this.emit('message', result);
+                }
+            });
+            this.socket.on('error', (e) => {
+                console.error('miot socket error:\n\t' + e.message);
+            });
+            const bindPromise = new Promise((resolve) => {
+                this.socket.once('listening', resolve);
+            });
+            this.socket.bind({exclusive: false});
+            await bindPromise;
+            this.recreateSocketPromise.resolve(undefined);
+        } catch (e) {
+            console.error(e);
+            await this.recreateSocket();
         }
     }
 }

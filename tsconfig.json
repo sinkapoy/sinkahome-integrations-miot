@@ -13,7 +13,7 @@
         "allowUnreachableCode": false,
         "noImplicitAny": false,
         "sourceMap": true,
-        "rootDir": "./",
+        "rootDir": "./src",
         "resolveJsonModule": true,
         "strictPropertyInitialization": false,
         "moduleResolution": "node",
@@ -32,10 +32,14 @@
     },
     "typeRoots": [
         "node_modules/@types",
-        "types"
+        "types",
+        "src/types"
     ],
     "include": [
         "src",
+        "src/**/*.ts",
+        "src/types/*.d.ts",
+        "src/**/*.vue"
     ],
     "exclude": [
         "node_modules",

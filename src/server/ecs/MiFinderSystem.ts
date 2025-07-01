@@ -1,14 +1,14 @@
 import { type FileT, HomeSystem, homeEngine } from '@sinkapoy/home-core';
-import { HandshakeConnection } from './MiQuery';
-import { type ISaveConfig } from './interfaces/saves/ISaveConfig';
-import { MiCloudService } from './MiCloudService';
+import { HandshakeConnection } from '../MiQuery';
+import { type ISaveConfig } from '../../interfaces/saves/ISaveConfig';
+import { MiCloudAccountProvider } from '../MiCloudAccountProvider';
 import { readFile, writeFile } from 'fs/promises';
-import { type IAccountDeviceInfo } from './interfaces/IAccountDeviceInfo';
-import { type ISaveDeviceInfo } from './interfaces/saves/ISaveDeviceInfo';
+import { type IAccountDeviceInfo } from '../../interfaces/IAccountDeviceInfo';
+import { type ISaveDeviceInfo } from '../../interfaces/saves/ISaveDeviceInfo';
 import { existsSync } from 'fs';
-import { getUUIDByMiotDeviceId } from './utils/deviceIdToUUIDAdapter';
-import { createMiotGadget } from './utils/createDevice';
-import { miotPluginStore } from './store';
+import { getUUIDByMiotDeviceId } from '../../utils/deviceIdToUUIDAdapter';
+import { createMiotGadget } from '../../utils/createDevice';
+import { miotPluginStore } from '../store';
 
 const FILE_PATH = 'server-data/miioConfig.json';
 const MIIO_DEVICES_PATH = 'server-data/miio_devices.json';
@@ -17,7 +17,7 @@ class MiFinderSystem extends HomeSystem {
 
     private readonly handshakeMsg = new HandshakeConnection('255.255.255.255');
 
-    private accounts: Record<number, MiCloudService> = {};
+    private accounts: Record<number, MiCloudAccountProvider> = {};
 
     onInit (): void {
         homeEngine.emit('appendFile', {
@@ -54,7 +54,7 @@ class MiFinderSystem extends HomeSystem {
         try {
             const config: ISaveConfig = JSON.parse(file.content);
             config.accounts.forEach((accConf) => {
-                const acc = new MiCloudService(
+                const acc = new MiCloudAccountProvider(
                     accConf.username,
                     accConf.password,
                     accConf.locale,
@@ -63,11 +63,13 @@ class MiFinderSystem extends HomeSystem {
 
                 acc.once('loggedIn', async () => {
                     const devs = await acc.getDevices();
-                    console.debug('devices', devs);
                     this.accounts[acc.miioUserId] = acc;
                     miotPluginStore.accounts[acc.miioUserId] = acc;
                     await this.saveDevices(devs);
                     this.addSavedDevices();
+                    await acc.getMapData('1029726937', '1737992578');
+                    // await acc.getMapData('1029726937', 'Карта1 ');
+                    // await acc.getMapData('1029726937', '1029726937');
                 });
             });
         } catch (e) {

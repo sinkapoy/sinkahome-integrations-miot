@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'crypto';
-import { CustomCryptRC4 } from './utils/rc4';
+import { CustomCryptRC4 } from '../utils/rc4';
 import { stringify } from 'querystring';
 import fetch from 'node-fetch';
 
@@ -14,8 +14,8 @@ export interface IAuthData {
 }
 
 export class MiCloudApiProvider {
-    static async request (path: string, data: object, auth: IAuthData) {
-        const url = this.getApiUrl(auth.country, path);
+    static async request (relativePath: string, data: object, auth: IAuthData) {
+        const url = this.getApiUrl(auth.country, relativePath);
         const load = this.generateQueryHeaders(
             'POST',
             auth.userAgent,
@@ -49,8 +49,21 @@ export class MiCloudApiProvider {
         }
     }
 
-    protected static getApiUrl (country: string, path: string = '') {
-        country = country?.length ? country : 'cn';
+    static async get(url: string, _data: object, auth: IAuthData){
+        const load = this.generateQueryHeaders(
+            'GET',
+            auth.userAgent,
+            auth.clientId,
+            auth.miioUserId,
+            auth.serviceToken,
+            auth.locale,
+        );
+
+        const queryResult = await fetch(url, load);
+        return queryResult;
+    }
+
+    protected static getApiUrl (country: string = 'cn', path: string = '') {
         let url = ((country === 'cn') ? '' : country + '.') + 'api.io.mi.com/app/';
         url = url + path;
         url = url.replace(/\/\//g, '/');
@@ -73,7 +86,6 @@ export class MiCloudApiProvider {
                     `yetAnotherServiceToken=${serviceToken}`,
                     `serviceToken=${serviceToken}`,
                     `locale=${locale}`,
-                    'channel=MI_APP_STORE',
                 ].join('; '),
             },
         };

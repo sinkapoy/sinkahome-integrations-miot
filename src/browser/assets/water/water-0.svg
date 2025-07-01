@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="30mm"
+   height="30mm"
+   viewBox="0 0 30 30"
+   version="1.1"
+   id="svg8950"
+   inkscape:version="1.1.2 (0a00cf5339, 2022-02-04)"
+   sodipodi:docname="water-0.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview8952"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:document-units="mm"
+     showgrid="false"
+     inkscape:zoom="1.622695"
+     inkscape:cx="28.347903"
+     inkscape:cy="82.578673"
+     inkscape:window-width="1512"
+     inkscape:window-height="1411"
+     inkscape:window-x="1016"
+     inkscape:window-y="0"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs8947" />
+  <g
+     inkscape:label="Слой 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <path
+       id="path8684"
+       style="fill:#ffffff;stroke:none;stroke-width:1;stroke-linecap:round;stroke-miterlimit:4;stroke-dasharray:none"
+       d="M 14.998711,9.2598795 13.65304,10.294957 c -2.350982,1.807897 -3.7139034,3.850057 -3.7087969,5.556752 0,1.144614 1.0227469,3.149018 1.9285479,3.792035 1.910715,1.356095 3.860747,1.454891 5.774848,0.29247 0.784702,-0.476594 1.266561,-1.017587 1.746145,-1.960589 0.364199,-0.716094 0.661987,-1.664149 0.661987,-2.10685 0,-1.7281 -1.352894,-3.760417 -3.710887,-5.573818 z m 0,1.7388955 c 0.596503,0 3.264217,2.909649 3.601323,3.927951 0.51091,1.543394 -0.372666,3.329993 -2.079969,4.204388 -0.667914,0.342 -2.456947,0.336365 -3.086629,-0.0098 v 0 c -1.698519,-0.934075 -2.540847,-2.669239 -2.036048,-4.194032 0.337079,-1.018302 3.004819,-3.927952 3.601323,-3.927952 z m -0.19431,6.039961 c -0.777611,-0.01032 -1.445842,0.05945 -1.559587,0.173117 -0.130016,0.129699 -0.169227,0.409892 -0.08681,0.622697 0.121788,0.316203 0.468154,0.373962 1.898068,0.316256 1.565196,-0.063 1.749769,-0.121364 1.749769,-0.550862 v 0 c 0,-0.4268 -0.184203,-0.488104 -1.661398,-0.551921 -0.114274,-0.0048 -0.227912,-0.0079 -0.339011,-0.0093 z" />
+  </g>
+</svg>
