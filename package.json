@@ -1,6 +1,6 @@
 {
     "name": "@sinkapoy/home-integrations-miot",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "miot integration for sinkahome",
     "main": "./dist/serverIndex.js",
     "browser": "./dist/browserIndex.js",
@@ -48,8 +48,6 @@
         "vuetify": "^3.8.1"
     },
     "files": [
-        "dist/index.d.ts",
-        "dist/node.js",
-        "dist/node.js.map"
+        "dist"
     ]
 }
